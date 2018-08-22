@@ -34,7 +34,23 @@
 #endif
 
 #include <squirrel.h>
+#include <sqstdblob.h>
 #include <string>
+#include <vector>
+
+#ifndef SQRAT_EXTRA_TYPES_INCLUDE
+#define SQRAT_EXTRA_TYPES_INCLUDE "sqratTypes.h"
+#endif // SQRAT_EXTRA_TYPES_INCLUDE
+
+#ifndef SQRAT_EXTRA_TYPES_SOURCE
+#define SQRAT_EXTRA_TYPES_SOURCE "sqratTypes.h"
+#endif // SQRAT_EXTRA_TYPES_SOURCE
+
+#ifndef SQRAT_EXTRA_TYPES_NONREF
+#define SQRAT_EXTRA_TYPES_NONREF "sqratTypes.h"
+#endif // SQRAT_EXTRA_TYPES_NONREF
+
+#include SQRAT_EXTRA_TYPES_INCLUDE
 
 #include "sqratClassType.h"
 #include "sqratUtil.h"
@@ -378,7 +394,13 @@ struct Var<const T&> {
     ///
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     static void push(HSQUIRRELVM vm, const T& value) {
+#if 0
+        union { const T *a; T *b; } ptr;
+        ptr.a = &value;
+        ClassType<T>::PushInstance(vm, ptr.b);
+#else
         ClassType<T>::PushInstanceCopy(vm, value);
+#endif
     }
 };
 
@@ -482,7 +504,7 @@ struct Var<SharedPtr<T> > {
             SQCATCH_NOEXCEPT(vm) {
                 return;
             }
-            value.Init(new T(instance.value));
+            value = SharedPtr<T>(new T(instance.value));
         }
     }
 
@@ -494,9 +516,164 @@ struct Var<SharedPtr<T> > {
     ///
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     static void push(HSQUIRRELVM vm, const SharedPtr<T>& value) {
-        PushVarR(vm, *value);
+        if (ClassType<T>::hasClassData(vm)) {
+            ClassType<T>::PushSharedInstance(vm, value);
+        } else {
+            PushVarR(vm, *value);
+        }
     }
 };
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Used to get (as copies) and push (as references) class instances to and from the stack as a SharedPtr
+///
+/// \tparam T Type of instance (usually doesnt need to be defined explicitly)
+///
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+template<class T>
+struct Var<SharedPtr<T>&> {
+
+    SharedPtr<T> value; ///< The actual value of get operations
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// Attempts to get the value off the stack at idx as the given type
+    ///
+    /// \param vm  Target VM
+    /// \param idx Index trying to be read
+    ///
+    /// \remarks
+    /// This function MUST have its Error handled if it occurred.
+    ///
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    Var(HSQUIRRELVM vm, SQInteger idx) {
+        if (sq_gettype(vm, idx) != OT_NULL) {
+            ObjectReference<T> *ref = NULL;
+            T* ptr = ClassType<T>::GetInstance(vm, idx, false, &ref);
+            SQCATCH_NOEXCEPT(vm) {
+                return;
+            }
+
+            if(ref) {
+                value = ref->Promote();
+            } else {
+                value = SharedPtr<T>();
+            }
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// Called by Sqrat::PushVar to put a class object on the stack
+    ///
+    /// \param vm    Target VM
+    /// \param value Value to push on to the VM's stack
+    ///
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    static void push(HSQUIRRELVM vm, const SharedPtr<T>& value) {
+        if (ClassType<T>::hasClassData(vm)) {
+            ClassType<T>::PushSharedInstance(vm, value);
+        } else {
+            PushVarR(vm, *value);
+        }
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Used to get (as copies) and push (as references) class instances to and from the stack as a SharedPtr
+///
+/// \tparam T Type of instance (usually doesnt need to be defined explicitly)
+///
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+template<class T>
+struct Var<const SharedPtr<T>&> {
+
+    SharedPtr<T> value; ///< The actual value of get operations
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// Attempts to get the value off the stack at idx as the given type
+    ///
+    /// \param vm  Target VM
+    /// \param idx Index trying to be read
+    ///
+    /// \remarks
+    /// This function MUST have its Error handled if it occurred.
+    ///
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    Var(HSQUIRRELVM vm, SQInteger idx) {
+        if (sq_gettype(vm, idx) != OT_NULL) {
+            ObjectReference<T> *ref = NULL;
+            T* ptr = ClassType<T>::GetInstance(vm, idx, false, &ref);
+            SQCATCH_NOEXCEPT(vm) {
+                return;
+            }
+
+            if(ref) {
+                value = ref->Promote();
+            } else {
+                value = SharedPtr<T>();
+            }
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// Called by Sqrat::PushVar to put a class object on the stack
+    ///
+    /// \param vm    Target VM
+    /// \param value Value to push on to the VM's stack
+    ///
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    static void push(HSQUIRRELVM vm, const SharedPtr<T>& value) {
+        if (ClassType<T>::hasClassData(vm)) {
+            ClassType<T>::PushSharedInstance(vm, value);
+        } else {
+            PushVarR(vm, *value);
+        }
+    }
+};
+
+template<class T>
+struct Var<SharedPtr<ObjectReference<T> > > {
+
+    SharedPtr<ObjectReference<T> > value; ///< The actual value of get operations
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// Attempts to get the value off the stack at idx as the given type
+    ///
+    /// \param vm  Target VM
+    /// \param idx Index trying to be read
+    ///
+    /// \remarks
+    /// This function MUST have its Error handled if it occurred.
+    ///
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    Var(HSQUIRRELVM vm, SQInteger idx) {
+        if (sq_gettype(vm, idx) != OT_NULL) {
+            ObjectReference<T> *ref = NULL;
+            T* ptr = ClassType<T>::GetInstance(vm, idx, false, &ref);
+            SQCATCH_NOEXCEPT(vm) {
+                return;
+            }
+
+            if(ref) {
+                value = std::make_shared<ObjectReference<T> >();
+                value->SetSharedObject(ref->Promote());
+            } else {
+                value = SharedPtr<ObjectReference<T> >();
+            }
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// Called by Sqrat::PushVar to put a class object on the stack
+    ///
+    /// \param vm    Target VM
+    /// \param value Value to push on to the VM's stack
+    ///
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    static void push(HSQUIRRELVM vm, const SharedPtr<ObjectReference<T> >& value) {
+        SQTHROW(vm, _SC("do not pass in an object reference"));
+    }
+};
+
 
 // Integer types
 #define SCRAT_INTEGER( type ) \
@@ -740,6 +917,8 @@ public:
         sq_pushstring(vm, value, len);
     }
 };
+
+#include SQRAT_EXTRA_TYPES_SOURCE
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Used to get and push strings to and from the stack (string is usually std::string)
@@ -1003,6 +1182,109 @@ public:
 };
 #endif
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Used to get and push std::vector<char> to and from the stack
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+template<>
+struct Var< std::vector<char> > {
+
+    std::vector<char> value; ///< The actual value of get operations
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// Attempts to get the value off the stack at idx as a vector<char>
+    ///
+    /// \param vm  Target VM
+    /// \param idx Index trying to be read
+    ///
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    Var(HSQUIRRELVM vm, SQInteger idx) {
+        value.clear();
+
+        SQInteger sz = sqstd_getblobsize(vm, idx);
+
+        if(sz > 0)
+        {
+            char *pData = 0;
+
+            if(SQ_SUCCEEDED(sqstd_getblob(vm, idx, reinterpret_cast<
+                SQUserPointer*>(&pData))) && 0 != pData)
+            {
+                for(SQInteger i = 0; i < sz; ++i)
+                {
+                    value.push_back(pData[i]);
+                }
+            }
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// Called by Sqrat::PushVar to put a vector<char> on the stack
+    ///
+    /// \param vm    Target VM
+    /// \param value Value to push on to the VM's stack
+    ///
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    static void push(HSQUIRRELVM vm, const std::vector<char>& value) {
+        SQUserPointer pData = sqstd_createblob(vm, value.size());
+
+        if(0 != pData)
+        {
+            memcpy(pData, &value[0], value.size());
+        }
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Used to get and push const std::vector<char> references to and from the stack
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+template<>
+struct Var<const std::vector<char>&> {
+
+    std::vector<char> value; ///< The actual value of get operations
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// Attempts to get the value off the stack at idx as a vector<char>
+    ///
+    /// \param vm  Target VM
+    /// \param idx Index trying to be read
+    ///
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    Var(HSQUIRRELVM vm, SQInteger idx) {
+        value.clear();
+
+        SQInteger sz = sqstd_getblobsize(vm, idx);
+
+        if(sz > 0)
+        {
+            char *pData = 0;
+
+            if(SQ_SUCCEEDED(sqstd_getblob(vm, idx, reinterpret_cast<
+                SQUserPointer*>(&pData))) && 0 != pData)
+            {
+                for(SQInteger i = 0; i < sz; ++i)
+                {
+                    value.push_back(pData[i]);
+                }
+            }
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// Called by Sqrat::PushVar to put a vector<char> on the stack
+    ///
+    /// \param vm    Target VM
+    /// \param value Value to push on to the VM's stack
+    ///
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    static void push(HSQUIRRELVM vm, const std::vector<char>& value) {
+        SQUserPointer pData = sqstd_createblob(vm, value.size());
+
+        if(0 != pData)
+        {
+            memcpy(pData, &value[0], value.size());
+        }
+    }
+};
 
 // Non-referencable type definitions
 template<class T> struct is_referencable {static const bool value = true;};
@@ -1024,6 +1306,8 @@ SCRAT_MAKE_NONREFERENCABLE(float)
 SCRAT_MAKE_NONREFERENCABLE(double)
 SCRAT_MAKE_NONREFERENCABLE(bool)
 SCRAT_MAKE_NONREFERENCABLE(string)
+
+#include SQRAT_EXTRA_TYPES_NONREF
 
 #ifdef _MSC_VER
 #if defined(__int64)
