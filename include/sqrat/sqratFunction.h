@@ -139,7 +139,7 @@ public:
     /// \return True if the Function currently has a null value, otherwise false
     ///
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    bool IsNull() {
+    bool IsNull() const {
         return sq_isnull(obj);
     }
 

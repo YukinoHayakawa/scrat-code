@@ -67,3 +67,33 @@ TEST_F(SqratTest, LoadScriptFromFile) {
         FAIL() << _SC("Script Run Failed: ") << Sqrat::Error::Message(vm);
     }
 }
+
+TEST_F(SqratTest, LoadScriptBytecode) {
+    //
+    // Compile script, load script from bytecode and run it
+    //
+
+    DefaultVM::Set(vm);
+
+    std::string bytecode;
+
+    {
+        Script script;
+        script.CompileString(_SC("x <- 40 + 2;"));
+        bytecode = script.SaveBytecode();
+        if (bytecode.empty()) {
+            FAIL() << _SC("Script SaveBytecode Failed!");
+        }
+    }
+
+    {
+        Script script;
+        if (!script.LoadBytecode(bytecode)) {
+            FAIL() << _SC("Script LoadBytecode Failed!");
+        }
+        std::string errMsg;
+        if (!script.Run(errMsg)) {
+            FAIL() << _SC("Script Run Failed: ") << errMsg;
+        }
+    }
+}
